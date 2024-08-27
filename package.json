@@ -1,0 +1,22 @@
+{
+  "name": "hhs3-sim",
+  "version": "0.0.1",
+  "description": "Data Model Simulation for HHS v3",
+  "source": "src/index.ts",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  
+  "scripts": {
+    "test": "NODE_PATH=\"src\" node --max-old-space-size=2048 -r ts-node/register  ./src/test/run-tests.ts",
+    "debug": "NODE_PATH=\"src\" node --max-old-space-size=2048 --inspect-brk -r ts-node/register ./src/test/run-tests.ts",
+    "build": "npx tsc"
+  },
+  "author": "Santiago Bazerque",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "ts-node": "^10.9.2",
+    "@types/node": "^22.2.0"
+  }
+}
