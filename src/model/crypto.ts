@@ -14,6 +14,7 @@ function hashUint8Array(data: Uint8Array): Promise<ArrayBuffer> {
 async function b64hash(text: string): Promise<Hash> {
 
     let digest = await hash(text);
+
     return b64(digest);
 }
 

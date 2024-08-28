@@ -1,5 +1,7 @@
 import mst from './mst-test';
 import set from './set-test';
+import rep from './replica-test';
+
 
 import { run, skip } from './test';
 
@@ -11,6 +13,7 @@ async function main() {
 
     allTests.set(mst.title, mst.tests);
     allTests.set(set.title, set.tests);
+    allTests.set(rep.title, rep.tests);
 
     console.log('Running tests for Hyper Hyper Space v3' + (filters.length > 0? ' (applying filter: ' + filters.toString() + ')' : '') + '\n');    
 

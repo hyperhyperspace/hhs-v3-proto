@@ -6,7 +6,8 @@ import { LiteralSet } from "model/literal_set";
 import { MerkleSearchTree } from "model/mst";
 import { Op, OpLog } from "model/op_log";
 import { MemoryStore, Store } from "storage";
-import { Refs } from "model/state";
+import { Refs, State } from "model/state";
+import { Replica } from "model/replica";
 
 type Token = string;
 const tokenSeedLength = 128 / 8;
@@ -16,9 +17,7 @@ type SetState = {
     removeTokensByInsertToken: MerkleSearchTree<LiteralSet>
 };
 
-type SetOpLog = OpLog<SetState, SetOp>;
-
-async function join(s1: SetState, s2: SetState): Promise<SetState> {
+async function join(s1: State, s2: State): Promise<State> {
 
     return {
         insertTokensByElement: 
@@ -35,8 +34,6 @@ type AddOp = Op & { type: 'add', payload: {element: string, tokenSeed: string }}
 
 type RemoveOp = Op & { type: 'remove', payload: { element: string, tokenSeed: string, tokens: LiteralSet }};
 
-type SetOp = AddOp | RemoveOp;
-
 function emptyState(store: Store, hashSeed: string): SetState {
     return {
         insertTokensByElement: new MerkleSearchTree(store, hashSeed),
@@ -44,11 +41,11 @@ function emptyState(store: Store, hashSeed: string): SetState {
     }
 }
 
-async function createAddOp(log: SetOpLog, element: string): Promise<AddOp> {
+async function createAddOp(log: OpLog, element: string): Promise<AddOp> {
     return {
         target: log.id,
         
-        allPrevOps: log.ops.rootHash,
+        allPrevOps: await log.ops.getRootHash(),
         prevOps: lset.make(log.last.values()),
         
         type: 'add',
@@ -56,7 +53,7 @@ async function createAddOp(log: SetOpLog, element: string): Promise<AddOp> {
     }
 }
 
-async function createRemoveOp(log: SetOpLog, element: string): Promise<RemoveOp|undefined> {
+async function createRemoveOp(log: OpLog, element: string): Promise<RemoveOp|undefined> {
     const state = log.state as SetState;
 
     const tokens = await state.insertTokensByElement.get(element);
@@ -80,7 +77,7 @@ async function createRemoveOp(log: SetOpLog, element: string): Promise<RemoveOp|
     return {
         target: log.id,
 
-        allPrevOps: log.ops.rootHash,
+        allPrevOps: await log.ops.getRootHash(),
         prevOps: lset.make(log.last.values()),
         
         type: 'remove',
@@ -92,14 +89,14 @@ async function createRemoveOp(log: SetOpLog, element: string): Promise<RemoveOp|
     }
 }
 
-async function applySetOp(state: SetState, op: SetOp): Promise<SetState> {
+async function applySetOp(state: State, op: Op): Promise<SetState> {
     
     const type = op.type;
     
     if (type === 'add') {
-        return applyAddOp(state, op);
+        return applyAddOp(state as SetState, op as AddOp);
     } else if (type === 'remove') {
-        return applyRemoveOp(state, op);
+        return applyRemoveOp(state as SetState, op as RemoveOp);
     }
 
     throw new Error('Unexpected op type for Set: "' + type + '"');
@@ -139,14 +136,14 @@ async function applyRemoveOp(state: SetState, op: RemoveOp): Promise<SetState> {
     }
 }
 
-async function reverseSetOp(state: SetState, op: SetOp): Promise<SetState> {
+async function reverseSetOp(state: State, op: Op): Promise<SetState> {
 
     const type = op.type;
     
     if (type === 'add') {
-        return reverseAddOp(state, op);
+        return reverseAddOp(state as SetState, op as AddOp);
     } else if (type === 'remove') {
-        return reverseRemoveOp(state, op);
+        return reverseRemoveOp(state as SetState, op as RemoveOp);
     }
 
     throw new Error('Unexpected op type for Set: "' + type + '"');
@@ -204,7 +201,7 @@ async function reverseRemoveOp(state: SetState, op: RemoveOp): Promise<SetState>
     }
 }
 
-async function precondition(state: SetState, op: SetOp, updatedRefs?: Refs): Promise<boolean> {
+async function precondition(state: State, op: Op, updatedRefs?: Refs): Promise<boolean> {
     return true;
 }
 
@@ -250,6 +247,7 @@ async function createToken(seed: string, element: string, prevOps: LiteralSet, r
 }
 
 type ReplicatedSetConfig = {
+    id?: string, // if present, should be a b64-encoded string
     store?: Store,
     hashSeed?: string // if present, should be a b64-encoded string
 }
@@ -269,7 +267,8 @@ class ReplicatedSetView {
 
 class ReplicatedSet {
 
-    log: OpLog<SetState, SetOp>;
+    log: OpLog;
+    stateRefLogs: Map<string, OpLog>;
 
     constructor(config?: ReplicatedSetConfig) {
 
@@ -277,18 +276,26 @@ class ReplicatedSet {
         const hashSeed: string = config?.hashSeed || crypto.b64random(8);
 
         this.log = new OpLog(
-                crypto.b64random(8),
+                config?.id || crypto.b64random(8),
                 new MerkleSearchTree(store, hashSeed), 
                 new Set(), 
+                new MerkleSearchTree(store, hashSeed),
                 emptyState(store, hashSeed), 
                 applySetOp,
                 reverseSetOp,
                 precondition,
                 join);
+
+        this.stateRefLogs = new Map();
+    }
+
+    public attachTo(replica: Replica) {
+        replica.add(this.log);
+        this.stateRefLogs = replica.getLogs();
     }
 
     async has(element: string) {
-        return has(element, this.log.state);
+        return has(element, this.log.state as SetState);
     }
 
     async add(element: string) {

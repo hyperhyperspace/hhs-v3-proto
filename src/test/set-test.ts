@@ -3,12 +3,6 @@ import { assertFalse, assertTrue, TestPRNG } from "./test";
 
 const hashSeed = 'XzeqEwGqwprqix0f6pnVO7i1kfpq9bCf4JGI';
 
-function checkReplicatedSet(repl: ReplicatedSet, orig: Set<string>) {
-
-
-
-}
-
 const suite = {title: '[SET] OR-Set implementation over Merkle Search Trees', tests: [
 
     {

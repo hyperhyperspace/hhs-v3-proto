@@ -6,24 +6,25 @@ import { Hash } from "./crypto";
 
 class Replica {
 
-    store: Store;
     logs: Map<string, OpLog>;
 
-    constructor(store: Store) {
-        this.store = store;
+    constructor() {
         this.logs = new Map();
-    }
-
-    attach() {
-
     }
 
     add(log: OpLog) {
         this.logs.set(log.id, log);
     }
 
+    getLogs(): Map<string, OpLog> {
+        return this.logs;
+    }
+
+    async syncWith(other: Replica) {
+        for (const [id, log] of this.logs.entries()) {
+            await other.logs.get(id)!.sync(log);
+        }
+    }
 }
 
-class Item {
-
-}
+export { Replica };
